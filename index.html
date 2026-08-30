@@ -14,6 +14,7 @@
     --bg:#f5f5f1; --surface:#fffffe; --surface-2:#eeede8; --ink:#17181c; --muted:#63656e;
     --line:#e0dfd8; --line-soft:#eceae3;
     --call:#1baf7a; --put:#e34948; --accent:#2a78d6; --atm:#eda100;
+    --zone-long:rgba(227,73,72,.09); --zone-short:rgba(27,175,122,.12); --zone:transparent;
     --shadow:0 1px 2px rgba(20,20,25,.06), 0 8px 24px rgba(20,20,25,.05);
   }
   @media (prefers-color-scheme: dark) {
@@ -21,6 +22,7 @@
       --bg:#121317; --surface:#1b1d22; --surface-2:#23262c; --ink:#eef0f3; --muted:#969aa3;
       --line:#2c2f36; --line-soft:#23262c;
       --call:#3ac08c; --put:#e26463; --accent:#3f90ec; --atm:#e0a92e;
+      --zone-long:rgba(226,100,99,.14); --zone-short:rgba(58,192,140,.16); --zone:transparent;
       --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
     }
   }
@@ -28,9 +30,11 @@
     --bg:#121317; --surface:#1b1d22; --surface-2:#23262c; --ink:#eef0f3; --muted:#969aa3;
     --line:#2c2f36; --line-soft:#23262c;
     --call:#3ac08c; --put:#e26463; --accent:#3f90ec; --atm:#e0a92e;
+    --zone-long:rgba(226,100,99,.14); --zone-short:rgba(58,192,140,.16); --zone:transparent;
     --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
   }
   * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
   html { -webkit-text-size-adjust:100%; }
   body {
     margin:0; background:var(--bg); color:var(--ink);
@@ -110,6 +114,42 @@
   .state { padding:38px 18px; text-align:center; color:var(--muted); font:400 13px/1.5 "IBM Plex Mono", monospace; }
   .state.err { color:var(--put); }
 
+  /* strangle builder */
+  .sg-wrap { padding:16px 18px 18px; }
+  .sg-controls { display:flex; flex-wrap:wrap; gap:12px 16px; align-items:center; }
+  #sg-side button, #sg-width button {
+    font:500 12.5px/1 "IBM Plex Mono", monospace; color:var(--muted); background:none; border:0;
+    cursor:pointer; padding:7px 12px; border-radius:7px; transition:color .12s, background .12s;
+  }
+  #sg-side button:hover, #sg-width button:hover { color:var(--ink); }
+  #sg-side button[aria-pressed="true"], #sg-width button[aria-pressed="true"] { background:var(--surface); color:var(--ink); box-shadow:var(--shadow); }
+  #sg-side button:focus-visible, #sg-width button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .sg-custom { display:flex; gap:12px; flex-wrap:wrap; }
+
+  .sg-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(132px,1fr)); gap:10px; margin:16px 0 4px; }
+  .sg-cell { background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:11px 13px; }
+  .sg-cell .k { font:500 10px/1.3 "IBM Plex Mono", monospace; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .sg-cell .v { font:600 16px/1.2 "IBM Plex Sans", sans-serif; margin-top:5px; font-variant-numeric:tabular-nums; }
+  .sg-cell .v small { font-weight:400; color:var(--muted); font-size:11px; }
+  .sg-cell.hi { border-color:var(--accent); }
+
+  .sg-payoff { margin:14px 0 6px; }
+  .sg-payoff svg { width:100%; height:auto; overflow:visible; }
+  .sg-pl-pos { stroke:var(--call); } .sg-pl-neg { stroke:var(--put); }
+  .sg-fill-pos { fill:var(--call); opacity:.10; } .sg-fill-neg { fill:var(--put); opacity:.10; }
+  .sg-axis { stroke:var(--line); stroke-width:1; }
+  .sg-be { stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3; }
+  .sg-txt { font:400 10px/1 "IBM Plex Mono", monospace; fill:var(--muted); }
+  .sg-txt.spot { fill:var(--accent); }
+
+  .sg-verdict { font:400 13px/1.6 "IBM Plex Sans", sans-serif; color:var(--ink); margin:8px 0 0;
+    padding:11px 13px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; border-left:3px solid var(--accent); }
+
+  tbody tr.leg td.strike { box-shadow:inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent); }
+  tbody tr.leg-call td.strike { color:var(--call); }
+  tbody tr.leg-put td.strike { color:var(--put); }
+  tbody tr.zone td:not(.strike) { background:var(--zone); }
+
   footer { margin-top:30px; padding-top:18px; border-top:1px solid var(--line); font:400 11.5px/1.7 "IBM Plex Mono", monospace; color:var(--muted); }
   footer b { color:var(--ink); font-weight:500; }
   footer a { color:var(--accent); text-decoration:none; }
@@ -152,6 +192,29 @@
 
   <section class="stats" id="stats"></section>
 
+  <section class="panel" id="sg-panel" hidden>
+    <div class="panel-head">
+      <h2>Strangle builder</h2>
+      <span class="meta">buy (long) or sell (short) an out-of-the-money call + put, same expiry</span>
+    </div>
+    <div class="sg-wrap">
+      <div class="sg-controls">
+        <div class="seg" id="sg-side" role="group" aria-label="Direction">
+          <button data-v="long" aria-pressed="true">Long</button>
+          <button data-v="short" aria-pressed="false">Short</button>
+        </div>
+        <div class="seg" id="sg-width" role="group" aria-label="Strike width"></div>
+        <div class="sg-custom" id="sg-custom" hidden>
+          <label class="field">Call <select id="sg-callK"></select></label>
+          <label class="field">Put <select id="sg-putK"></select></label>
+        </div>
+      </div>
+      <div class="sg-grid" id="sg-grid"></div>
+      <figure class="sg-payoff"><svg id="sg-svg" viewBox="0 0 720 150" role="img" aria-label="Strangle payoff at expiry"></svg></figure>
+      <p class="sg-verdict" id="sg-verdict"></p>
+    </div>
+  </section>
+
   <section class="panel">
     <div class="panel-head">
       <h2 id="chain-title">Option chain</h2>
@@ -160,6 +223,7 @@
         <span><i style="background:var(--call)"></i>Call</span>
         <span><i style="background:var(--put)"></i>Put</span>
         <span><i style="background:var(--atm)"></i>ATM</span>
+        <span><i style="border:2px solid var(--accent);background:transparent"></i>Strangle leg</span>
       </span>
     </div>
     <div id="chain-body"><div class="state">Loading…</div></div>
@@ -167,7 +231,7 @@
 
   <footer>
     <p><b>Sources.</b> BTC &amp; ETH: <a href="https://docs.delta.exchange/" target="_blank" rel="noopener">Delta Exchange</a> <code>/v2/tickers</code> (greeks included). SOL: <a href="https://docs.deribit.com/" target="_blank" rel="noopener">Deribit</a> USDC linear options <code>book_summary</code> — bulk feed carries no greeks, so SOL delta is blank. All prices in USD. IV is each venue's mark IV.</p>
-    <p><b>Expected move</b> = at-the-money straddle (call mark + put mark) ÷ spot — the market's priced-in ± move by that expiry. <b>Not investment advice.</b> Auto-refreshes every 5s (only the asset you're viewing). <span id="built"></span></p>
+    <p><b>Expected move</b> = at-the-money straddle (call mark + put mark) ÷ spot — the market's priced-in ± move by that expiry. <b>Strangle builder</b> uses leg marks for cost; <code>P(...)</code> is a rough estimate from the leg deltas (delta ≈ risk-neutral probability), not a real probability, and SOL has no greeks so it's omitted there. <b>Not investment advice.</b> Auto-refreshes every 5s (only the asset you're viewing). <span id="built"></span></p>
   </footer>
 </div>
 
@@ -211,7 +275,8 @@ async function loadDelta(asset) {
       exp: `${dd}${MONTHS[+mm - 1]}${yy}`,
       expMs: Date.UTC(2000 + +yy, +mm - 1, +dd, 12),
       bid: num(q.best_bid), ask: num(q.best_ask), mark: num(x.mark_price),
-      iv: num(q.mark_iv), delta: num(g.delta), oi: num(x.oi),
+      iv: num(q.mark_iv), delta: num(g.delta), gamma: num(g.gamma),
+      theta: num(g.theta), vega: num(g.vega), oi: num(x.oi),
     });
   }
   const spot = median(t.map((x) => num(x.spot_price)));
@@ -276,6 +341,159 @@ function nearestFutureExpiry(rows) {
   return exps;
 }
 
+/* ---- strangle builder ---- */
+const strangle = { side: "long", width: null, custom: false, callK: null, putK: null };
+const DELTA_TARGETS = [10, 16, 25];
+const PCT_TARGETS = [5, 10, 15];
+const nearestBy = (arr, keyFn) => arr.reduce((best, x) => (keyFn(x) < keyFn(best) ? x : best), arr[0]);
+const sum2 = (a, b) => (a == null && b == null ? null : (a || 0) + (b || 0));
+const signed = (v, d = 2) => v == null ? "–" : (v > 0 ? "+" : "") + v.toFixed(d);
+
+function computeStrangle(inWin, spot) {
+  const calls = inWin.filter((r) => r.side === "C" && r.strike > spot && r.mark != null).sort((a, b) => a.strike - b.strike);
+  const puts = inWin.filter((r) => r.side === "P" && r.strike < spot && r.mark != null).sort((a, b) => b.strike - a.strike);
+  if (calls.length < 1 || puts.length < 1) return null;
+  const mode = inWin.some((r) => r.delta != null) ? "delta" : "pct";
+  const targets = mode === "delta" ? DELTA_TARGETS : PCT_TARGETS;
+  if (strangle.width == null || !targets.includes(strangle.width)) strangle.width = mode === "delta" ? 16 : 10;
+
+  let cLeg, pLeg;
+  if (strangle.custom) {
+    cLeg = calls.find((r) => r.strike === strangle.callK) || calls[Math.min(1, calls.length - 1)];
+    pLeg = puts.find((r) => r.strike === strangle.putK) || puts[Math.min(1, puts.length - 1)];
+  } else if (mode === "delta") {
+    const t = strangle.width / 100;
+    cLeg = nearestBy(calls, (r) => Math.abs((r.delta ?? 1) - t));
+    pLeg = nearestBy(puts, (r) => Math.abs(Math.abs(r.delta ?? 1) - t));
+  } else {
+    const tc = spot * (1 + strangle.width / 100), tp = spot * (1 - strangle.width / 100);
+    cLeg = nearestBy(calls, (r) => Math.abs(r.strike - tc));
+    pLeg = nearestBy(puts, (r) => Math.abs(r.strike - tp));
+  }
+  strangle.callK = cLeg.strike;
+  strangle.putK = pLeg.strike;
+
+  const net = cLeg.mark + pLeg.mark;
+  const beUp = cLeg.strike + net, beDn = pLeg.strike - net;
+  const pInside = (cLeg.delta != null && pLeg.delta != null)
+    ? Math.max(0, Math.min(1, 1 - Math.abs(cLeg.delta) - Math.abs(pLeg.delta))) : null;
+  return {
+    mode, calls, puts, cLeg, pLeg, net,
+    netAsk: sum2(cLeg.ask, pLeg.ask), netBid: sum2(cLeg.bid, pLeg.bid),
+    beUp, beDn, moveUp: (beUp - spot) / spot, moveDn: (spot - beDn) / spot,
+    pInside, vega: sum2(cLeg.vega, pLeg.vega), theta: sum2(cLeg.theta, pLeg.theta),
+  };
+}
+
+function payoffSVG(sg, spot) {
+  const W = 720, H = 150, m = { t: 12, r: 12, b: 20, l: 12 };
+  const span = sg.beUp - sg.beDn;
+  const xLo = Math.min(sg.beDn - span * 0.28, spot * 0.97);
+  const xHi = Math.max(sg.beUp + span * 0.28, spot * 1.03);
+  const long = strangle.side === "long";
+  const pl = (px) => {
+    let v;
+    if (px <= sg.pLeg.strike) v = (sg.pLeg.strike - px) - sg.net;
+    else if (px >= sg.cLeg.strike) v = (px - sg.cLeg.strike) - sg.net;
+    else v = -sg.net;
+    return long ? v : -v;
+  };
+  const N = 80;
+  const pts = Array.from({ length: N + 1 }, (_, i) => { const px = xLo + (xHi - xLo) * i / N; return [px, pl(px)]; });
+  // fixed scale in multiples of premium so the loss zone stays readable; wings clip off-top
+  const yHi = long ? sg.net * 2.2 : sg.net * 1.4;
+  const yLo = long ? -sg.net * 1.4 : -sg.net * 2.2;
+  const X = (v) => m.l + (v - xLo) / (xHi - xLo) * (W - m.l - m.r);
+  const Yr = (v) => m.t + (yHi - v) / (yHi - yLo) * (H - m.t - m.b);
+  const Y = (v) => Math.max(m.t, Math.min(H - m.b, Yr(v)));
+  const y0 = Yr(0);
+  const line = pts.map((p, i) => (i ? "L" : "M") + X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1)).join(" ");
+  const posArea = `M ${X(xLo).toFixed(1)} ${y0} ` + pts.map((p) => "L" + X(p[0]).toFixed(1) + " " + Y(Math.max(0, p[1])).toFixed(1)).join(" ") + ` L ${X(xHi).toFixed(1)} ${y0} Z`;
+  const negArea = `M ${X(xLo).toFixed(1)} ${y0} ` + pts.map((p) => "L" + X(p[0]).toFixed(1) + " " + Y(Math.min(0, p[1])).toFixed(1)).join(" ") + ` L ${X(xHi).toFixed(1)} ${y0} Z`;
+  const vt = (v, cls, label) => `<line class="sg-be ${cls}" x1="${X(v).toFixed(1)}" y1="${m.t}" x2="${X(v).toFixed(1)}" y2="${H - m.b}"/>`
+    + `<text class="sg-txt ${cls}" x="${X(v).toFixed(1)}" y="${H - 6}" text-anchor="middle">${label}</text>`;
+  return `
+    <path class="sg-fill-pos" d="${posArea}"/><path class="sg-fill-neg" d="${negArea}"/>
+    <line class="sg-axis" x1="${m.l}" y1="${y0}" x2="${W - m.r}" y2="${y0}"/>
+    ${vt(sg.beDn, "", fmtUsd(sg.beDn))}${vt(sg.beUp, "", fmtUsd(sg.beUp))}
+    <line class="sg-be spot" x1="${X(spot).toFixed(1)}" y1="${m.t}" x2="${X(spot).toFixed(1)}" y2="${H - m.b}" style="stroke:var(--accent)"/>
+    <text class="sg-txt spot" x="${X(spot).toFixed(1)}" y="${m.t - 2}" text-anchor="middle">spot ${fmtUsd(spot, spot >= 100 ? 0 : 2)}</text>
+    <path class="${long ? "sg-pl-pos" : "sg-pl-neg"}" d="${line}" fill="none" stroke-width="2"/>`;
+}
+
+function paintStrangle(sg, spot, expMovePct, exp) {
+  const panel = $("#sg-panel");
+  if (!sg) { panel.hidden = true; return; }
+  panel.hidden = false;
+  const long = strangle.side === "long";
+  $("#chain-body").style.setProperty("--zone", long ? "var(--zone-long)" : "var(--zone-short)");
+
+  $("#sg-side").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === strangle.side));
+
+  const unit = sg.mode === "delta" ? "Δ" : "%";
+  const targets = sg.mode === "delta" ? DELTA_TARGETS : PCT_TARGETS;
+  $("#sg-width").innerHTML = targets.map((t) =>
+    `<button data-v="${t}" aria-pressed="${!strangle.custom && strangle.width === t}">${t}${unit}</button>`).join("")
+    + `<button data-v="custom" aria-pressed="${strangle.custom}">Custom</button>`;
+
+  const cust = $("#sg-custom");
+  cust.hidden = !strangle.custom;
+  if (strangle.custom) {
+    const opt = (r) => `<option value="${r.strike}">${r.strike.toLocaleString()} · ${r.delta != null ? "Δ" + Math.abs(r.delta).toFixed(2) : fmtUsd(r.mark)}</option>`;
+    $("#sg-callK").innerHTML = sg.calls.map(opt).join("");
+    $("#sg-putK").innerHTML = sg.puts.map(opt).join("");
+    $("#sg-callK").value = sg.cLeg.strike;
+    $("#sg-putK").value = sg.pLeg.strike;
+  }
+
+  if (!(sg.net > spot * 2e-4)) {
+    $("#sg-grid").innerHTML =
+      `<div class="sg-cell" style="grid-column:1/-1"><div class="k">Legs</div>` +
+      `<div class="v">${sg.pLeg.strike.toLocaleString()} P / ${sg.cLeg.strike.toLocaleString()} C</div>` +
+      `<div class="s">Both wings are near-worthless at ${exp} — pick a later expiry for a strangle with real premium.</div></div>`;
+    $("#sg-svg").innerHTML = "";
+    $("#sg-verdict").textContent = "";
+    return;
+  }
+
+  const beMove = (sg.moveUp + sg.moveDn) / 2;
+  const legSub = sg.mode === "delta"
+    ? `Δ ${Math.abs(sg.pLeg.delta).toFixed(2)} / ${sg.cLeg.delta.toFixed(2)}`
+    : `${((1 - sg.pLeg.strike / spot) * 100).toFixed(1)}% / ${((sg.cLeg.strike / spot - 1) * 100).toFixed(1)}% OTM`;
+  const nv = sg.vega != null ? (long ? sg.vega : -sg.vega) : null;
+  const nt = sg.theta != null ? (long ? sg.theta : -sg.theta) : null;
+
+  const cells = [
+    { k: long ? "Net debit" : "Net credit", v: fmtUsd(sg.net),
+      s: sg.netAsk != null ? (long ? "mark · ask " + fmtUsd(sg.netAsk) : "mark · bid " + fmtUsd(sg.netBid ?? sg.net)) : "at mark" },
+    { k: "Legs (put / call)", v: `${sg.pLeg.strike.toLocaleString()} / ${sg.cLeg.strike.toLocaleString()}`, s: legSub },
+    { k: "Breakevens", v: `${fmtUsd(sg.beDn)} – ${fmtUsd(sg.beUp)}`, s: `−${(sg.moveDn * 100).toFixed(1)}% / +${(sg.moveUp * 100).toFixed(1)}%` },
+    { k: "Move to profit", v: `±${(beMove * 100).toFixed(1)}<small> %</small>`, hi: true,
+      s: expMovePct != null ? `expected ±${(expMovePct * 100).toFixed(1)}%` : "avg of both breakevens" },
+    { k: long ? "Max loss" : "Max profit", v: fmtUsd(sg.net), s: long ? "if it lands between strikes" : "if it stays between strikes" },
+    { k: long ? "P(full loss)" : "P(keep credit)", v: sg.pInside != null ? `${(sg.pInside * 100).toFixed(0)}<small> %</small>` : "–",
+      s: sg.pInside != null ? "expires between strikes" : "no greeks for this asset" },
+    { k: "Net vega / theta", v: nv != null ? `${signed(nv, 1)} / ${signed(nt, 1)}` : "–", s: long ? "own vol, pay time" : "short vol, collect time" },
+  ];
+  $("#sg-grid").innerHTML = cells.map((c) =>
+    `<div class="sg-cell${c.hi ? " hi" : ""}"><div class="k">${c.k}</div><div class="v">${c.v}</div><div class="s">${c.s || ""}</div></div>`).join("");
+
+  $("#sg-svg").innerHTML = payoffSVG(sg, spot);
+
+  const A = asset;
+  const P = sg.pLeg.strike.toLocaleString(), C = sg.cLeg.strike.toLocaleString();
+  const em = expMovePct == null ? "" : `±${(expMovePct * 100).toFixed(1)}%`;
+  const wider = expMovePct != null && beMove > expMovePct;
+  const pClause = sg.pInside != null ? ` About <b>${(sg.pInside * 100).toFixed(0)}%</b> odds of that, by the leg deltas.` : "";
+  $("#sg-verdict").innerHTML = long
+    ? `Pay <b>${fmtUsd(sg.net)}</b> for the ${P}/${C} strangle. ${A} must move roughly <b>±${(beMove * 100).toFixed(1)}%</b> by ${exp} to break even`
+      + (em ? ` — ${wider ? "wider than" : "inside"} the market's ${em} expected move, so you're betting on ${wider ? "a bigger swing than priced in" : "movement the market underprices"}` : "")
+      + `. Full <b>${fmtUsd(sg.net)}</b> loss if ${A} finishes between ${P} and ${C}.`
+    : `Collect <b>${fmtUsd(sg.net)}</b> selling the ${P}/${C} strangle. Keep all of it if ${A} stays between <b>${fmtUsd(sg.beDn)}</b> and <b>${fmtUsd(sg.beUp)}</b> (±${(beMove * 100).toFixed(1)}%) through ${exp}`
+      + (em ? ` — ${wider ? "a wider safe band than" : "a tighter band than"} the ${em} expected move` : "")
+      + `.${pClause} Losses grow without limit if it breaks out.`;
+}
+
 function render() {
   document.querySelectorAll("#tabs button").forEach((b) =>
     b.setAttribute("aria-selected", b.dataset.asset === asset));
@@ -286,6 +504,7 @@ function render() {
 
   if (!d || (d.error && !d.rows)) {
     statsEl.innerHTML = "";
+    $("#sg-panel").hidden = true;
     body.innerHTML = `<div class="state err">Couldn't load ${asset}.<br>${d?.error || ""}</div>`;
     $("#chain-title").textContent = `${asset} option chain`;
     $("#chain-meta").textContent = "";
@@ -296,8 +515,11 @@ function render() {
   const expList = nearestFutureExpiry(d.rows);
   const sel = $("#expiry");
   sel.innerHTML = expList.map((x) => `<option value="${x.e}">${x.e}</option>`).join("");
-  if (!chosenExpiry[asset] || !expList.some((x) => x.e === chosenExpiry[asset]))
-    chosenExpiry[asset] = expList[0]?.e;
+  if (!chosenExpiry[asset] || !expList.some((x) => x.e === chosenExpiry[asset])) {
+    // default to the first expiry >= ~2 days out (so premiums are meaningful), else the nearest
+    const soon = expList.find((x) => x.ms - Date.now() > 1.8 * 864e5);
+    chosenExpiry[asset] = (soon || expList[0])?.e;
+  }
   sel.value = chosenExpiry[asset] || "";
 
   const exp = chosenExpiry[asset];
@@ -330,13 +552,23 @@ function render() {
   $("#chain-title").textContent = `${asset} option chain`;
   $("#chain-meta").textContent = `${exp} · spot ${fmtUsd(spot, spot >= 100 ? 2 : 3)} · ${d.venue}${d.error ? " · (showing last good data)" : ""}`;
 
-  if (!strikes.length) { body.innerHTML = `<div class="state">No strikes near spot for ${exp}.</div>`; stampUpdated(); return; }
+  if (!strikes.length) {
+    body.innerHTML = `<div class="state">No strikes near spot for ${exp}.</div>`;
+    paintStrangle(null); stampUpdated(); return;
+  }
+
+  const sg = computeStrangle(inWin, spot);
 
   const H = (t) => `<th>${t}</th>`;
-  const cell = (r, f, cls) => `<td class="${cls}">${f(r)}</td>`;
   const rowsHtml = strikes.map((k) => {
     const c = at(k, "C") || {}, p = at(k, "P") || {};
-    return `<tr class="${k === atmK ? "atm" : ""}">
+    let cls = k === atmK ? "atm" : "";
+    if (sg) {
+      if (k === sg.cLeg.strike) cls += " leg leg-call";
+      else if (k === sg.pLeg.strike) cls += " leg leg-put";
+      else if (k > sg.pLeg.strike && k < sg.cLeg.strike) cls += " zone";
+    }
+    return `<tr class="${cls.trim()}">
       <td class="call-v">${fmtOi(c.oi)}</td>
       <td class="call-v dim">${fmtDelta(c.delta)}</td>
       <td class="call-v">${fmtPct(c.iv)}</td>
@@ -364,6 +596,8 @@ function render() {
     </thead>
     <tbody>${rowsHtml}</tbody>
   </table></div>`;
+
+  paintStrangle(sg, spot, movePct, exp);
   stampUpdated();
 }
 
@@ -381,15 +615,32 @@ function stampUpdated() {
   stampUpdated._t = setInterval(paint, 1000);
 }
 
+function resetStrangleStrikes() {
+  strangle.custom = false; strangle.callK = null; strangle.putK = null; strangle.width = null;
+}
 function switchTo(a) {
   asset = a;
+  resetStrangleStrikes();
   render();
   if (!store[a] || Date.now() - (store[a].at || 0) > REFRESH_MS) loadAsset(a, { spin: false });
 }
 $("#tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (b) switchTo(b.dataset.asset);
 });
-$("#expiry").addEventListener("change", (e) => { chosenExpiry[asset] = e.target.value; render(); });
+$("#expiry").addEventListener("change", (e) => { chosenExpiry[asset] = e.target.value; resetStrangleStrikes(); render(); });
+
+$("#sg-side").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  strangle.side = b.dataset.v; render();
+});
+$("#sg-width").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.v === "custom") strangle.custom = true;
+  else { strangle.custom = false; strangle.width = +b.dataset.v; }
+  render();
+});
+$("#sg-callK").addEventListener("change", (e) => { strangle.custom = true; strangle.callK = +e.target.value; render(); });
+$("#sg-putK").addEventListener("change", (e) => { strangle.custom = true; strangle.putK = +e.target.value; render(); });
 $("#refresh").addEventListener("click", () => loadAsset(asset));
 document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
