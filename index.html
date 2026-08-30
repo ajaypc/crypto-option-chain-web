@@ -167,7 +167,7 @@
 
   <footer>
     <p><b>Sources.</b> BTC &amp; ETH: <a href="https://docs.delta.exchange/" target="_blank" rel="noopener">Delta Exchange</a> <code>/v2/tickers</code> (greeks included). SOL: <a href="https://docs.deribit.com/" target="_blank" rel="noopener">Deribit</a> USDC linear options <code>book_summary</code> — bulk feed carries no greeks, so SOL delta is blank. All prices in USD. IV is each venue's mark IV.</p>
-    <p><b>Expected move</b> = at-the-money straddle (call mark + put mark) ÷ spot — the market's priced-in ± move by that expiry. <b>Not investment advice.</b> Auto-refreshes every 90s. <span id="built"></span></p>
+    <p><b>Expected move</b> = at-the-money straddle (call mark + put mark) ÷ spot — the market's priced-in ± move by that expiry. <b>Not investment advice.</b> Auto-refreshes every 5s (only the asset you're viewing). <span id="built"></span></p>
   </footer>
 </div>
 
@@ -176,7 +176,7 @@ const DELTA = "https://api.india.delta.exchange/v2";
 const DERIBIT = "https://www.deribit.com/api/v2";
 const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 const STRIKE_PCT = 0.15;
-const REFRESH_MS = 90_000;
+const REFRESH_MS = 5_000;
 
 const $ = (s) => document.querySelector(s);
 const num = (v) => (v == null || v === "" || Number.isNaN(+v) ? null : +v);
@@ -244,27 +244,28 @@ async function loadSol() {
 const median = (a) => { const s = a.filter(Number.isFinite).sort((x, y) => x - y); return s.length ? s[s.length >> 1] : null; };
 
 /* ---- state ---- */
-const store = {};           // asset -> {spot, rows, venue, error, at}
+const store = {};            // asset -> {spot, rows, venue, error, at}
 let asset = "BTC";
-let chosenExpiry = {};       // asset -> exp string
-let loading = false;
+let chosenExpiry = {};        // asset -> exp string
+const inflight = {};          // asset -> bool
+const FETCH = {
+  BTC: () => loadDelta("BTC"),
+  ETH: () => loadDelta("ETH"),
+  SOL: () => loadSol(),
+};
 
-async function loadAll() {
-  if (loading) return;
-  loading = true;
-  $("#refresh").classList.add("spin");
-  const tasks = {
-    BTC: () => loadDelta("BTC"),
-    ETH: () => loadDelta("ETH"),
-    SOL: () => loadSol(),
-  };
-  await Promise.all(Object.entries(tasks).map(async ([a, fn]) => {
-    try { store[a] = { ...(await fn()), at: Date.now(), error: null }; }
-    catch (e) { store[a] = { ...(store[a] || {}), error: e.message, at: store[a]?.at }; }
-  }));
-  loading = false;
-  $("#refresh").classList.remove("spin");
-  render();
+async function loadAsset(a, { spin = true } = {}) {
+  if (inflight[a]) return;
+  inflight[a] = true;
+  if (a === asset && spin) $("#refresh").classList.add("spin");
+  try { store[a] = { ...(await FETCH[a]()), at: Date.now(), error: null }; }
+  catch (e) { store[a] = { ...(store[a] || {}), error: e.message, at: store[a]?.at }; }
+  inflight[a] = false;
+  if (a === asset) { $("#refresh").classList.remove("spin"); render(); }
+}
+
+function tick() {
+  if (document.visibilityState === "visible") loadAsset(asset, { spin: false });
 }
 
 function nearestFutureExpiry(rows) {
@@ -370,34 +371,40 @@ function stampUpdated() {
   const d = store[asset];
   const el = $("#updated");
   if (!d?.at) { el.textContent = "…"; return; }
-  const tick = () => {
+  const paint = () => {
     const s = Math.round((Date.now() - d.at) / 1000);
-    el.textContent = s < 5 ? "updated just now" : `updated ${s < 60 ? s + "s" : Math.round(s / 60) + "m"} ago`;
-    el.classList.toggle("stale", s > REFRESH_MS / 1000 + 30);
+    el.textContent = s < 3 ? "updated just now" : `updated ${s < 60 ? s + "s" : Math.round(s / 60) + "m"} ago`;
+    el.classList.toggle("stale", s > Math.max(15, (REFRESH_MS / 1000) * 3));
   };
-  tick();
+  paint();
   clearInterval(stampUpdated._t);
-  stampUpdated._t = setInterval(tick, 1000);
+  stampUpdated._t = setInterval(paint, 1000);
 }
 
+function switchTo(a) {
+  asset = a;
+  render();
+  if (!store[a] || Date.now() - (store[a].at || 0) > REFRESH_MS) loadAsset(a, { spin: false });
+}
 $("#tabs").addEventListener("click", (e) => {
-  const b = e.target.closest("button"); if (!b) return;
-  asset = b.dataset.asset; render();
+  const b = e.target.closest("button"); if (b) switchTo(b.dataset.asset);
 });
 $("#expiry").addEventListener("change", (e) => { chosenExpiry[asset] = e.target.value; render(); });
-$("#refresh").addEventListener("click", loadAll);
+$("#refresh").addEventListener("click", () => loadAsset(asset));
 document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
     const order = ["BTC", "ETH", "SOL"];
     const i = order.indexOf(asset);
-    asset = order[(i + (e.key === "ArrowRight" ? 1 : order.length - 1)) % order.length];
-    render();
+    switchTo(order[(i + (e.key === "ArrowRight" ? 1 : order.length - 1)) % order.length]);
   }
 });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") loadAsset(asset, { spin: false });
+});
 
-$("#built").textContent = "";
-loadAll();
-setInterval(loadAll, REFRESH_MS);
+loadAsset("BTC");
+setTimeout(() => { loadAsset("ETH", { spin: false }); loadAsset("SOL", { spin: false }); }, 500);
+setInterval(tick, REFRESH_MS);
 </script>
 </body>
 </html>
