@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crypto Option Chain — BTC · ETH · SOL</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Live near-the-money option chains for BTC, ETH and SOL — mark, bid/ask, implied vol, greeks and open interest. Data from Delta Exchange and Deribit.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%9B%93%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg:#f5f5f1; --surface:#fffffe; --surface-2:#eeede8; --ink:#17181c; --muted:#63656e;
+    --line:#e0dfd8; --line-soft:#eceae3;
+    --call:#1baf7a; --put:#e34948; --accent:#2a78d6; --atm:#eda100;
+    --shadow:0 1px 2px rgba(20,20,25,.06), 0 8px 24px rgba(20,20,25,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#121317; --surface:#1b1d22; --surface-2:#23262c; --ink:#eef0f3; --muted:#969aa3;
+      --line:#2c2f36; --line-soft:#23262c;
+      --call:#3ac08c; --put:#e26463; --accent:#3f90ec; --atm:#e0a92e;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#121317; --surface:#1b1d22; --surface-2:#23262c; --ink:#eef0f3; --muted:#969aa3;
+    --line:#2c2f36; --line-soft:#23262c;
+    --call:#3ac08c; --put:#e26463; --accent:#3f90ec; --atm:#e0a92e;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font:400 15px/1.55 "IBM Plex Sans", system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1180px; margin:0 auto; padding:clamp(20px,4vw,44px) clamp(14px,3vw,32px) 72px; }
+
+  header.mast { border-bottom:1px solid var(--line); padding-bottom:18px; }
+  .eyebrow {
+    font:500 11px/1 "IBM Plex Mono", monospace; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--muted); display:flex; gap:9px; align-items:center; flex-wrap:wrap;
+  }
+  .eyebrow .dot { width:4px; height:4px; border-radius:50%; background:var(--muted); }
+  h1 {
+    font:700 clamp(24px,4vw,34px)/1.1 "IBM Plex Sans", sans-serif;
+    letter-spacing:-.015em; margin:12px 0 6px; text-wrap:balance;
+  }
+  .sub { color:var(--muted); margin:0; font-size:15px; max-width:60ch; }
+
+  .toolbar { display:flex; flex-wrap:wrap; gap:14px 20px; align-items:center; margin:22px 0 4px; }
+  .tabs { display:inline-flex; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:3px; gap:2px; }
+  .tabs button {
+    font:600 14px/1 "IBM Plex Sans", sans-serif; color:var(--muted); background:none; border:0;
+    cursor:pointer; padding:9px 18px; border-radius:7px; transition:color .12s, background .12s;
+  }
+  .tabs button:hover { color:var(--ink); }
+  .tabs button[aria-selected="true"] { background:var(--surface); color:var(--ink); box-shadow:var(--shadow); }
+  .tabs button:focus-visible, select:focus-visible, .btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  .field { display:inline-flex; align-items:center; gap:8px; font:500 12px/1 "IBM Plex Mono", monospace; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  select {
+    font:500 13px/1 "IBM Plex Mono", monospace; color:var(--ink); background:var(--surface);
+    border:1px solid var(--line); border-radius:8px; padding:8px 10px; cursor:pointer;
+  }
+  .btn {
+    font:500 13px/1 "IBM Plex Mono", monospace; color:var(--ink); background:var(--surface);
+    border:1px solid var(--line); border-radius:8px; padding:8px 12px; cursor:pointer;
+    display:inline-flex; align-items:center; gap:7px;
+  }
+  .btn:hover { background:var(--surface-2); }
+  .btn svg { width:13px; height:13px; }
+  .btn.spin svg { animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .upd { font:400 12px/1 "IBM Plex Mono", monospace; color:var(--muted); margin-left:auto; }
+  .upd.stale { color:var(--atm); }
+
+  .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px; margin:20px 0 6px; }
+  .stat { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:13px 15px 14px; }
+  .stat .k { font:500 10.5px/1.3 "IBM Plex Mono", monospace; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); }
+  .stat .v { font:700 21px/1.15 "IBM Plex Sans", sans-serif; margin-top:7px; font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
+  .stat .v .u { font-size:12px; color:var(--muted); font-weight:500; }
+  .stat .s { font:400 11.5px/1.4 "IBM Plex Mono", monospace; color:var(--muted); margin-top:2px; font-variant-numeric:tabular-nums; }
+
+  .panel { background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); margin-top:18px; overflow:hidden; }
+  .panel-head { display:flex; flex-wrap:wrap; gap:6px 16px; align-items:baseline; padding:15px 18px; border-bottom:1px solid var(--line); }
+  .panel-head h2 { font:600 15px/1.3 "IBM Plex Sans", sans-serif; margin:0; }
+  .panel-head .meta { font:400 12px/1.4 "IBM Plex Mono", monospace; color:var(--muted); }
+  .legend { display:flex; gap:14px; font:500 11.5px/1 "IBM Plex Mono", monospace; color:var(--muted); margin-left:auto; }
+  .legend i { width:9px; height:9px; border-radius:2px; display:inline-block; margin-right:5px; vertical-align:middle; }
+
+  .table-scroll { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; font:400 12.5px/1.35 "IBM Plex Mono", monospace; font-variant-numeric:tabular-nums; }
+  thead th { position:sticky; top:0; background:var(--surface); z-index:1; }
+  th, td { padding:7px 12px; text-align:right; white-space:nowrap; }
+  th { color:var(--muted); font-weight:500; border-bottom:1px solid var(--line); }
+  .grp { text-align:center; font:600 11px/1 "IBM Plex Mono", monospace; letter-spacing:.08em; text-transform:uppercase; padding-bottom:4px; }
+  .grp.c { color:var(--call); } .grp.p { color:var(--put); }
+  th.strike, td.strike { text-align:center; font-weight:600; color:var(--ink); background:var(--surface-2); position:sticky; left:0; }
+  tbody tr:nth-child(even) td:not(.strike) { background:var(--line-soft); }
+  td.sep { border-left:1px solid var(--line); }
+  tr.atm td { box-shadow:inset 0 1px 0 var(--atm), inset 0 -1px 0 var(--atm); }
+  tr.atm td.strike { color:var(--atm); box-shadow:inset 2px 0 0 var(--atm), inset 0 1px 0 var(--atm), inset 0 -1px 0 var(--atm); }
+  .dim { color:var(--muted); }
+  .call-v { color:var(--call); } .put-v { color:var(--put); }
+
+  .state { padding:38px 18px; text-align:center; color:var(--muted); font:400 13px/1.5 "IBM Plex Mono", monospace; }
+  .state.err { color:var(--put); }
+
+  footer { margin-top:30px; padding-top:18px; border-top:1px solid var(--line); font:400 11.5px/1.7 "IBM Plex Mono", monospace; color:var(--muted); }
+  footer b { color:var(--ink); font-weight:500; }
+  footer a { color:var(--accent); text-decoration:none; }
+
+  @media (max-width:560px) {
+    th, td { padding:6px 9px; }
+    table { font-size:11.5px; }
+    .upd { margin-left:0; width:100%; }
+  }
+  @media (prefers-reduced-motion:reduce) { * { animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div class="eyebrow">
+      <span>live option chain</span><span class="dot"></span>
+      <span>near expiry</span><span class="dot"></span>
+      <span id="src-note">Delta Exchange · Deribit</span>
+    </div>
+    <h1>Crypto Option Chain</h1>
+    <p class="sub">Near-the-money calls and puts for BTC, ETH and SOL — mark price, implied vol, delta and open interest, pulled live from the exchanges each time this page loads.</p>
+  </header>
+
+  <div class="toolbar">
+    <div class="tabs" id="tabs" role="tablist" aria-label="Asset">
+      <button role="tab" data-asset="BTC" aria-selected="true">BTC</button>
+      <button role="tab" data-asset="ETH" aria-selected="false">ETH</button>
+      <button role="tab" data-asset="SOL" aria-selected="false">SOL</button>
+    </div>
+    <label class="field">Expiry
+      <select id="expiry"></select>
+    </label>
+    <button class="btn" id="refresh" title="Refresh now">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3h-3"/></svg>
+      Refresh
+    </button>
+    <span class="upd" id="updated">loading…</span>
+  </div>
+
+  <section class="stats" id="stats"></section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2 id="chain-title">Option chain</h2>
+      <span class="meta" id="chain-meta"></span>
+      <span class="legend">
+        <span><i style="background:var(--call)"></i>Call</span>
+        <span><i style="background:var(--put)"></i>Put</span>
+        <span><i style="background:var(--atm)"></i>ATM</span>
+      </span>
+    </div>
+    <div id="chain-body"><div class="state">Loading…</div></div>
+  </section>
+
+  <footer>
+    <p><b>Sources.</b> BTC &amp; ETH: <a href="https://docs.delta.exchange/" target="_blank" rel="noopener">Delta Exchange</a> <code>/v2/tickers</code> (greeks included). SOL: <a href="https://docs.deribit.com/" target="_blank" rel="noopener">Deribit</a> USDC linear options <code>book_summary</code> — bulk feed carries no greeks, so SOL delta is blank. All prices in USD. IV is each venue's mark IV.</p>
+    <p><b>Expected move</b> = at-the-money straddle (call mark + put mark) ÷ spot — the market's priced-in ± move by that expiry. <b>Not investment advice.</b> Auto-refreshes every 90s. <span id="built"></span></p>
+  </footer>
+</div>
+
+<script>
+const DELTA = "https://api.india.delta.exchange/v2";
+const DERIBIT = "https://www.deribit.com/api/v2";
+const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const STRIKE_PCT = 0.15;
+const REFRESH_MS = 90_000;
+
+const $ = (s) => document.querySelector(s);
+const num = (v) => (v == null || v === "" || Number.isNaN(+v) ? null : +v);
+const fmtUsd = (v, d) => {
+  if (v == null) return "–";
+  const dp = d ?? (v >= 100 ? 0 : v >= 1 ? 2 : 4);
+  return "$" + (+v).toLocaleString("en-US", { minimumFractionDigits: Math.min(dp, 2), maximumFractionDigits: dp });
+};
+const fmtPct = (v) => v == null ? "–" : (v * 100).toFixed(1) + "%";
+const fmtOi = (v) => v == null ? "–" : v >= 1000 ? (v / 1000).toFixed(1) + "k" : v >= 10 ? String(Math.round(v)) : (+v).toFixed(1);
+const fmtDelta = (v) => v == null ? "–" : (Math.abs(v) < 0.005 ? "0.00" : v.toFixed(2));
+
+async function j(url) {
+  const r = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!r.ok) throw new Error("HTTP " + r.status + " — " + url);
+  const b = await r.json();
+  if (b.error) throw new Error(JSON.stringify(b.error));
+  return b.result;
+}
+
+/* ---- fetch + normalise each asset into a common shape ---- */
+async function loadDelta(asset) {
+  const t = await j(`${DELTA}/tickers?contract_types=call_options,put_options&underlying_asset_symbols=${asset}`);
+  const rows = [];
+  for (const x of t) {
+    const m = new RegExp(`^([CP])-${asset}-(\\d+)-(\\d{2})(\\d{2})(\\d{2})$`).exec(x.symbol);
+    if (!m) continue;
+    const [, side, strike, dd, mm, yy] = m;
+    const q = x.quotes || {}, g = x.greeks || {};
+    rows.push({
+      side, strike: +strike,
+      exp: `${dd}${MONTHS[+mm - 1]}${yy}`,
+      expMs: Date.UTC(2000 + +yy, +mm - 1, +dd, 12),
+      bid: num(q.best_bid), ask: num(q.best_ask), mark: num(x.mark_price),
+      iv: num(q.mark_iv), delta: num(g.delta), oi: num(x.oi),
+    });
+  }
+  const spot = median(t.map((x) => num(x.spot_price)));
+  return { spot, rows, venue: "Delta Exchange" };
+}
+
+async function loadSol() {
+  const [idx, book] = await Promise.all([
+    j(`${DERIBIT}/public/get_index_price?index_name=sol_usdc`),
+    j(`${DERIBIT}/public/get_book_summary_by_currency?currency=USDC&kind=option`),
+  ]);
+  const rows = [];
+  for (const x of book) {
+    if (!x.instrument_name.startsWith("SOL_USDC-")) continue;
+    const m = /^SOL_USDC-(\d{1,2})([A-Z]{3})(\d{2})-([\d.]+)-([CP])$/.exec(x.instrument_name);
+    if (!m) continue;
+    const [, dd, mon, yy, strike, side] = m;
+    rows.push({
+      side, strike: +strike,
+      exp: `${dd.padStart(2, "0")}${mon}${yy}`,
+      expMs: Date.UTC(2000 + +yy, MONTHS.indexOf(mon), +dd, 8),
+      bid: num(x.bid_price), ask: num(x.ask_price), mark: num(x.mark_price),
+      iv: num(x.mark_iv) != null ? num(x.mark_iv) / 100 : null, delta: null,
+      oi: num(x.open_interest),
+    });
+  }
+  return { spot: num(idx.index_price), rows, venue: "Deribit" };
+}
+
+const median = (a) => { const s = a.filter(Number.isFinite).sort((x, y) => x - y); return s.length ? s[s.length >> 1] : null; };
+
+/* ---- state ---- */
+const store = {};           // asset -> {spot, rows, venue, error, at}
+let asset = "BTC";
+let chosenExpiry = {};       // asset -> exp string
+let loading = false;
+
+async function loadAll() {
+  if (loading) return;
+  loading = true;
+  $("#refresh").classList.add("spin");
+  const tasks = {
+    BTC: () => loadDelta("BTC"),
+    ETH: () => loadDelta("ETH"),
+    SOL: () => loadSol(),
+  };
+  await Promise.all(Object.entries(tasks).map(async ([a, fn]) => {
+    try { store[a] = { ...(await fn()), at: Date.now(), error: null }; }
+    catch (e) { store[a] = { ...(store[a] || {}), error: e.message, at: store[a]?.at }; }
+  }));
+  loading = false;
+  $("#refresh").classList.remove("spin");
+  render();
+}
+
+function nearestFutureExpiry(rows) {
+  const now = Date.now();
+  const exps = [...new Set(rows.filter((r) => r.expMs > now).map((r) => r.exp))]
+    .map((e) => ({ e, ms: rows.find((r) => r.exp === e).expMs }))
+    .sort((a, b) => a.ms - b.ms);
+  return exps;
+}
+
+function render() {
+  document.querySelectorAll("#tabs button").forEach((b) =>
+    b.setAttribute("aria-selected", b.dataset.asset === asset));
+
+  const d = store[asset];
+  const body = $("#chain-body");
+  const statsEl = $("#stats");
+
+  if (!d || (d.error && !d.rows)) {
+    statsEl.innerHTML = "";
+    body.innerHTML = `<div class="state err">Couldn't load ${asset}.<br>${d?.error || ""}</div>`;
+    $("#chain-title").textContent = `${asset} option chain`;
+    $("#chain-meta").textContent = "";
+    stampUpdated();
+    return;
+  }
+
+  const expList = nearestFutureExpiry(d.rows);
+  const sel = $("#expiry");
+  sel.innerHTML = expList.map((x) => `<option value="${x.e}">${x.e}</option>`).join("");
+  if (!chosenExpiry[asset] || !expList.some((x) => x.e === chosenExpiry[asset]))
+    chosenExpiry[asset] = expList[0]?.e;
+  sel.value = chosenExpiry[asset] || "";
+
+  const exp = chosenExpiry[asset];
+  const spot = d.spot;
+  const lo = spot * (1 - STRIKE_PCT), hi = spot * (1 + STRIKE_PCT);
+  const inWin = d.rows.filter((r) => r.exp === exp && r.strike >= lo && r.strike <= hi);
+  const strikes = [...new Set(inWin.map((r) => r.strike))].sort((a, b) => a - b);
+  const at = (k, s) => inWin.find((r) => r.strike === k && r.side === s);
+  const atmK = strikes.reduce((a, b) => Math.abs(b - spot) < Math.abs(a - spot) ? b : a, strikes[0]);
+
+  // expected move from ATM straddle
+  const ac = at(atmK, "C"), ap = at(atmK, "P");
+  const straddle = ac?.mark != null && ap?.mark != null ? ac.mark + ap.mark : null;
+  const movePct = straddle != null ? straddle / spot : null;
+  const atmIv = [ac?.iv, ap?.iv].filter((v) => v != null);
+  const ivMid = atmIv.length ? atmIv.reduce((a, b) => a + b, 0) / atmIv.length : null;
+  const totOi = inWin.reduce((a, r) => a + (r.oi || 0), 0);
+  const dExp = expList.find((x) => x.e === exp);
+  const days = dExp ? Math.max(0, (dExp.ms - Date.now()) / 864e5) : null;
+
+  statsEl.innerHTML = [
+    { k: `${asset} spot`, v: fmtUsd(spot, spot >= 100 ? 2 : 3), s: d.venue },
+    { k: "Expected move", v: movePct != null ? `±${(movePct * 100).toFixed(1)}<span class="u"> %</span>` : "–",
+      s: straddle != null ? `${fmtUsd(spot - straddle)} – ${fmtUsd(spot + straddle)}` : "ATM straddle" },
+    { k: "ATM implied vol", v: ivMid != null ? `${(ivMid * 100).toFixed(1)}<span class="u"> %</span>` : "–", s: `strike ${atmK.toLocaleString()}` },
+    { k: "Open interest", v: `${fmtOi(totOi)}<span class="u"> ${asset}</span>`, s: `${strikes.length} strikes, ±${(STRIKE_PCT * 100).toFixed(0)}%` },
+    { k: "Expiry", v: exp, s: days != null ? `${days < 1 ? (days * 24).toFixed(0) + "h" : days.toFixed(1) + "d"} left` : "" },
+  ].map((t) => `<div class="stat"><div class="k">${t.k}</div><div class="v">${t.v}</div><div class="s">${t.s}</div></div>`).join("");
+
+  $("#chain-title").textContent = `${asset} option chain`;
+  $("#chain-meta").textContent = `${exp} · spot ${fmtUsd(spot, spot >= 100 ? 2 : 3)} · ${d.venue}${d.error ? " · (showing last good data)" : ""}`;
+
+  if (!strikes.length) { body.innerHTML = `<div class="state">No strikes near spot for ${exp}.</div>`; stampUpdated(); return; }
+
+  const H = (t) => `<th>${t}</th>`;
+  const cell = (r, f, cls) => `<td class="${cls}">${f(r)}</td>`;
+  const rowsHtml = strikes.map((k) => {
+    const c = at(k, "C") || {}, p = at(k, "P") || {};
+    return `<tr class="${k === atmK ? "atm" : ""}">
+      <td class="call-v">${fmtOi(c.oi)}</td>
+      <td class="call-v dim">${fmtDelta(c.delta)}</td>
+      <td class="call-v">${fmtPct(c.iv)}</td>
+      <td class="call-v">${fmtUsd(c.mark)}</td>
+      <td class="call-v dim">${fmtUsd(c.bid)} / ${fmtUsd(c.ask)}</td>
+      <td class="strike">${k.toLocaleString()}</td>
+      <td class="put-v sep">${fmtUsd(p.bid)} / ${fmtUsd(p.ask)}</td>
+      <td class="put-v">${fmtUsd(p.mark)}</td>
+      <td class="put-v">${fmtPct(p.iv)}</td>
+      <td class="put-v dim">${fmtDelta(p.delta)}</td>
+      <td class="put-v">${fmtOi(p.oi)}</td>
+    </tr>`;
+  }).join("");
+
+  body.innerHTML = `<div class="table-scroll"><table>
+    <thead>
+      <tr>
+        <td class="grp c" colspan="5">Calls</td><td></td><td class="grp p" colspan="5">Puts</td>
+      </tr>
+      <tr>
+        ${H("OI")}${H("Δ")}${H("IV")}${H("Mark")}${H("Bid / Ask")}
+        <th class="strike">Strike</th>
+        ${H("Bid / Ask")}${H("Mark")}${H("IV")}${H("Δ")}${H("OI")}
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+  </table></div>`;
+  stampUpdated();
+}
+
+function stampUpdated() {
+  const d = store[asset];
+  const el = $("#updated");
+  if (!d?.at) { el.textContent = "…"; return; }
+  const tick = () => {
+    const s = Math.round((Date.now() - d.at) / 1000);
+    el.textContent = s < 5 ? "updated just now" : `updated ${s < 60 ? s + "s" : Math.round(s / 60) + "m"} ago`;
+    el.classList.toggle("stale", s > REFRESH_MS / 1000 + 30);
+  };
+  tick();
+  clearInterval(stampUpdated._t);
+  stampUpdated._t = setInterval(tick, 1000);
+}
+
+$("#tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  asset = b.dataset.asset; render();
+});
+$("#expiry").addEventListener("change", (e) => { chosenExpiry[asset] = e.target.value; render(); });
+$("#refresh").addEventListener("click", loadAll);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    const order = ["BTC", "ETH", "SOL"];
+    const i = order.indexOf(asset);
+    asset = order[(i + (e.key === "ArrowRight" ? 1 : order.length - 1)) % order.length];
+    render();
+  }
+});
+
+$("#built").textContent = "";
+loadAll();
+setInterval(loadAll, REFRESH_MS);
+</script>
+</body>
+</html>
