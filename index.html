@@ -145,6 +145,18 @@
   .sg-verdict { font:400 13px/1.6 "IBM Plex Sans", sans-serif; color:var(--ink); margin:8px 0 0;
     padding:11px 13px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; border-left:3px solid var(--accent); }
 
+  .sg-hist { margin:14px 0 4px; padding:12px 13px 11px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; }
+  .sg-hist-head { font:500 10.5px/1.4 "IBM Plex Mono", monospace; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+    display:flex; flex-wrap:wrap; gap:4px 8px; align-items:baseline; }
+  .sg-hist-chg { text-transform:none; letter-spacing:0; margin-left:auto; }
+  .sg-hist svg { width:100%; height:auto; display:block; margin-top:9px; overflow:visible; }
+  .sg-hist-line { fill:none; stroke:var(--accent); stroke-width:1.6; stroke-linejoin:round; }
+  .sg-hist-base { stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3; opacity:.7; }
+  .sg-hist-dot { fill:var(--accent); }
+  .sg-hist-txt { font:400 9.5px/1 "IBM Plex Mono", monospace; fill:var(--muted); }
+  .sg-hist-note { font:400 10.5px/1.5 "IBM Plex Mono", monospace; color:var(--muted); margin-top:7px; }
+  .sg-hist .up { color:var(--call); } .sg-hist .down { color:var(--put); }
+
   tbody tr.leg td.strike { box-shadow:inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent); }
   tbody tr.leg-call td.strike { color:var(--call); }
   tbody tr.leg-put td.strike { color:var(--put); }
@@ -210,6 +222,14 @@
       </div>
       <div class="sg-grid" id="sg-grid"></div>
       <figure class="sg-payoff"><svg id="sg-svg" viewBox="0 0 720 150" role="img" aria-label="Strangle payoff at expiry"></svg></figure>
+      <div class="sg-hist" id="sg-hist" hidden>
+        <div class="sg-hist-head">
+          <span id="sg-hist-label">Net credit</span><span>· last 48h · 30-min</span>
+          <span class="sg-hist-chg" id="sg-hist-chg"></span>
+        </div>
+        <svg id="sg-hist-svg" viewBox="0 0 680 96" role="img" aria-label="Net credit over the last 48 hours"></svg>
+        <div class="sg-hist-note" id="sg-hist-note"></div>
+      </div>
       <p class="sg-verdict" id="sg-verdict"></p>
     </div>
   </section>
@@ -269,7 +289,7 @@ async function loadDelta(asset) {
     const [, side, strike, dd, mm, yy] = m;
     const q = x.quotes || {}, g = x.greeks || {};
     rows.push({
-      side, strike: +strike,
+      side, strike: +strike, sym: x.symbol, venue: "Delta Exchange",
       exp: `${dd}${MONTHS[+mm - 1]}${yy}`,
       expMs: Date.UTC(2000 + +yy, +mm - 1, +dd, 12),
       bid: num(q.best_bid), ask: num(q.best_ask), mark: num(x.mark_price),
@@ -319,6 +339,93 @@ function nearestFutureExpiry(rows) {
 const strangle = { side: "long", width: null, custom: false, callK: null, putK: null };
 const DELTA_TARGETS = [10, 16, 25];
 const PCT_TARGETS = [5, 10, 15];
+
+/* ---- 30-min net-credit history for the two legs ---- */
+const histState = { key: null, at: 0, series: null, err: null, loading: false };
+
+async function fetchCandles(sym) {
+  const now = Math.floor(Date.now() / 1000), start = now - 48 * 3600;
+  const r = await j(`${DELTA}/history/candles?resolution=30m`
+    + `&symbol=${encodeURIComponent(sym)}&start=${start}&end=${now}`);
+  return (r || []).map((b) => ({ t: b.time, c: num(b.close) }))
+    .filter((p) => p.c != null).sort((a, b) => a.t - b.t);
+}
+
+function buildNetSeries(cs, ps) {
+  if (!cs.length || !ps.length) return [];
+  const now = Math.floor(Date.now() / 1000), step = 1800;
+  const start = Math.ceil((now - 48 * 3600) / step) * step;
+  const sampler = (arr) => { let i = 0, last = null;
+    return (t) => { while (i < arr.length && arr[i].t <= t) last = arr[i++].c; return last; }; };
+  const sc = sampler(cs), sp = sampler(ps), out = [];
+  for (let t = start; t <= now; t += step) {
+    const c = sc(t), p = sp(t);
+    if (c != null && p != null) out.push({ t, v: c + p });
+  }
+  return out;
+}
+
+async function updateNetHistory(sg) {
+  const box = $("#sg-hist");
+  if (!sg || !sg.cLeg.sym || !sg.pLeg.sym || !store[asset]) { box.hidden = true; return; }
+  const key = [asset, sg.cLeg.sym, sg.pLeg.sym].join("|");
+  const fresh = key === histState.key && Date.now() - histState.at < 5 * 60_000;
+  if (!fresh && !histState.loading) {
+    histState.loading = true;
+    drawNetHistory(sg);                       // show "loading" note immediately
+    try {
+      const [cs, ps] = await Promise.all([
+        fetchCandles(sg.cLeg.sym), fetchCandles(sg.pLeg.sym)]);
+      histState.series = buildNetSeries(cs, ps);
+      histState.err = null; histState.key = key; histState.at = Date.now();
+    } catch (e) { histState.series = null; histState.err = e.message; }
+    histState.loading = false;
+  }
+  drawNetHistory(sg);
+}
+
+function drawNetHistory(sg) {
+  const box = $("#sg-hist"), s = histState.series;
+  const long = strangle.side === "long";
+  box.hidden = false;
+  $("#sg-hist-label").textContent = long ? "Net debit" : "Net credit";
+  const svgEl = $("#sg-hist-svg"), chgEl = $("#sg-hist-chg"), noteEl = $("#sg-hist-note");
+
+  if (!s || s.length < 2) {
+    svgEl.innerHTML = ""; chgEl.textContent = "";
+    noteEl.textContent = histState.loading ? "Loading 30-min history…"
+      : histState.err ? "History unavailable — " + histState.err
+      : "Not enough recent trades on both legs for a 30-min history — try a nearer expiry or a tighter width.";
+    return;
+  }
+
+  const W = 680, H = 96, pl = 46, pr = 10, pt = 8, pb = 15;
+  const t0 = s[0].t, t1 = s[s.length - 1].t, vs = s.map((p) => p.v);
+  let lo = Math.min(...vs), hi = Math.max(...vs);
+  const pad = (hi - lo) * 0.18 || hi * 0.05 || 1; lo -= pad; hi += pad;
+  const X = (t) => pl + (t - t0) / (t1 - t0 || 1) * (W - pl - pr);
+  const Y = (v) => pt + (1 - (v - lo) / (hi - lo || 1)) * (H - pt - pb);
+  const first = vs[0], last = vs[vs.length - 1], chg = last - first;
+  const line = s.map((p, i) => (i ? "L" : "M") + X(p.t).toFixed(1) + " " + Y(p.v).toFixed(1)).join(" ");
+
+  svgEl.innerHTML =
+    `<line class="sg-hist-base" x1="${pl}" y1="${Y(first).toFixed(1)}" x2="${W - pr}" y2="${Y(first).toFixed(1)}"/>`
+    + `<path class="sg-hist-line" d="${line}"/>`
+    + `<circle class="sg-hist-dot" cx="${X(t1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="3"/>`
+    + `<text class="sg-hist-txt" x="${pl - 6}" y="${(Y(hi - pad) + 3).toFixed(1)}" text-anchor="end">${fmtUsd(hi - pad)}</text>`
+    + `<text class="sg-hist-txt" x="${pl - 6}" y="${Y(lo + pad).toFixed(1)}" text-anchor="end">${fmtUsd(lo + pad)}</text>`
+    + `<text class="sg-hist-txt" x="${pl}" y="${H - 3}">−48h</text>`
+    + `<text class="sg-hist-txt" x="${W - pr}" y="${H - 3}" text-anchor="end">now</text>`;
+
+  chgEl.innerHTML = `<span class="${chg >= 0 ? "up" : "down"}">${chg >= 0 ? "▲" : "▼"} ${fmtUsd(Math.abs(chg))}</span>`
+    + ` vs 48h ago · now <b>${fmtUsd(last)}</b>`;
+
+  const P = sg.pLeg.strike.toLocaleString(), C = sg.cLeg.strike.toLocaleString();
+  const moved = chg >= 0 ? "risen" : "fallen";
+  noteEl.textContent = long
+    ? `The ${P}/${C} strangle has ${moved} ${fmtUsd(Math.abs(chg))} in 48h — ${chg >= 0 ? "more expensive to buy now" : "cheaper to buy now"}. Trade prices (30-min candles), gaps carried forward.`
+    : `The strangle you'd sell has ${moved} ${fmtUsd(Math.abs(chg))} in 48h — ${chg >= 0 ? "you'd collect more selling now" : "cheaper to buy back now"}. Trade prices (30-min candles), gaps carried forward.`;
+}
 const nearestBy = (arr, keyFn) => arr.reduce((best, x) => (keyFn(x) < keyFn(best) ? x : best), arr[0]);
 const sum2 = (a, b) => (a == null && b == null ? null : (a || 0) + (b || 0));
 const signed = (v, d = 2) => v == null ? "–" : (v > 0 ? "+" : "") + v.toFixed(d);
@@ -427,6 +534,7 @@ function paintStrangle(sg, spot, expMovePct, exp) {
       `<div class="s">Both wings are near-worthless at ${exp} — pick a later expiry for a strangle with real premium.</div></div>`;
     $("#sg-svg").innerHTML = "";
     $("#sg-verdict").textContent = "";
+    $("#sg-hist").hidden = true;
     return;
   }
 
@@ -466,6 +574,8 @@ function paintStrangle(sg, spot, expMovePct, exp) {
     : `Collect <b>${fmtUsd(sg.net)}</b> selling the ${P}/${C} strangle. Keep all of it if ${A} stays between <b>${fmtUsd(sg.beDn)}</b> and <b>${fmtUsd(sg.beUp)}</b> (±${(beMove * 100).toFixed(1)}%) through ${exp}`
       + (em ? ` — ${wider ? "a wider safe band than" : "a tighter band than"} the ${em} expected move` : "")
       + `.${pClause} Losses grow without limit if it breaks out.`;
+
+  updateNetHistory(sg);
 }
 
 function render() {
@@ -591,6 +701,7 @@ function stampUpdated() {
 
 function resetStrangleStrikes() {
   strangle.custom = false; strangle.callK = null; strangle.putK = null; strangle.width = null;
+  histState.key = null; histState.series = null; histState.err = null;
 }
 function switchTo(a) {
   asset = a;
