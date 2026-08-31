@@ -561,7 +561,7 @@ function paintStrangle(sg, spot, expMovePct, exp) {
   const cust = $("#sg-custom");
   cust.hidden = !strangle.custom;
   if (strangle.custom) {
-    const opt = (r) => `<option value="${r.strike}">${r.strike.toLocaleString()} · ${r.delta != null ? "Δ" + Math.abs(r.delta).toFixed(2) : fmtUsd(r.mark)}</option>`;
+    const opt = (r) => `<option value="${r.strike}">${r.strike.toLocaleString()} · ${fmtUsd(r.mark)}${r.delta != null ? " · Δ" + Math.abs(r.delta).toFixed(2) : ""}</option>`;
     $("#sg-callK").innerHTML = sg.calls.map(opt).join("");
     $("#sg-putK").innerHTML = sg.puts.map(opt).join("");
     $("#sg-callK").value = sg.cLeg.strike;
