@@ -24,7 +24,7 @@ Below the payoff is a **30-minute history** of the two legs' combined price
 from Delta's `/v2/history/candles`, with time-of-day marks on the x-axis. These
 are last-trade prices, so illiquid strikes have gaps (carried forward), the
 window shrinks to however far back both legs have actually traded, and a very
-near expiry may have too few trades to plot. A collapsible **data-points table** under the chart lists every 30-min row (time, each leg's price, net, 30-min change).
+near expiry may have too few trades to plot. A collapsible **data-points table** under the chart lists every 30-min row (time in IST, each leg's price, net, 30-min change).
 
 **Not investment advice.**
 
