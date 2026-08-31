@@ -153,6 +153,7 @@
   .sg-hist-line { fill:none; stroke:var(--accent); stroke-width:1.6; stroke-linejoin:round; }
   .sg-hist-base { stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3; opacity:.7; }
   .sg-hist-dot { fill:var(--accent); }
+  .sg-hist-grid { stroke:var(--line); stroke-width:1; }
   .sg-hist-txt { font:400 9.5px/1 "IBM Plex Mono", monospace; fill:var(--muted); }
   .sg-hist-note { font:400 10.5px/1.5 "IBM Plex Mono", monospace; color:var(--muted); margin-top:7px; }
   .sg-hist .up { color:var(--call); } .sg-hist .down { color:var(--put); }
@@ -224,7 +225,7 @@
       <figure class="sg-payoff"><svg id="sg-svg" viewBox="0 0 720 150" role="img" aria-label="Strangle payoff at expiry"></svg></figure>
       <div class="sg-hist" id="sg-hist" hidden>
         <div class="sg-hist-head">
-          <span id="sg-hist-label">Net credit</span><span>· last 48h · 30-min</span>
+          <span id="sg-hist-label">Net credit</span><span id="sg-hist-span">· last 48h · 30-min</span>
           <span class="sg-hist-chg" id="sg-hist-chg"></span>
         </div>
         <svg id="sg-hist-svg" viewBox="0 0 680 96" role="img" aria-label="Net credit over the last 48 hours"></svg>
@@ -393,6 +394,7 @@ function drawNetHistory(sg) {
 
   if (!s || s.length < 2) {
     svgEl.innerHTML = ""; chgEl.textContent = "";
+    $("#sg-hist-span").textContent = "· last 48h · 30-min";
     noteEl.textContent = histState.loading ? "Loading 30-min history…"
       : histState.err ? "History unavailable — " + histState.err
       : "Not enough recent trades on both legs for a 30-min history — try a nearer expiry or a tighter width.";
@@ -408,23 +410,39 @@ function drawNetHistory(sg) {
   const first = vs[0], last = vs[vs.length - 1], chg = last - first;
   const line = s.map((p, i) => (i ? "L" : "M") + X(p.t).toFixed(1) + " " + Y(p.v).toFixed(1)).join(" ");
 
+  const spanS = t1 - t0;
+  const fmtAgo = (sec) => sec < 5400
+    ? `−${Math.round(sec / 60)}m`
+    : spanS < 8 * 3600 ? `−${(sec / 3600).toFixed(1)}h` : `−${Math.round(sec / 3600)}h`;
+  const fmtSpan = spanS < 5400 ? `${Math.round(spanS / 60)}m`
+    : spanS < 8 * 3600 ? `${(spanS / 3600).toFixed(1)}h` : `${Math.round(spanS / 3600)}h`;
+  $("#sg-hist-span").textContent = `· last ${fmtSpan} · 30-min`;
+
+  let xAxis = "";
+  for (let i = 0; i <= 4; i++) {
+    const t = t0 + spanS * i / 4, xx = X(t).toFixed(1);
+    const label = i === 4 ? "now" : fmtAgo(t1 - t);
+    const anchor = i === 0 ? "start" : i === 4 ? "end" : "middle";
+    xAxis += `<line class="sg-hist-grid" x1="${xx}" y1="${pt}" x2="${xx}" y2="${H - pb}"/>`
+      + `<text class="sg-hist-txt" x="${xx}" y="${H - 3}" text-anchor="${anchor}">${label}</text>`;
+  }
+
   svgEl.innerHTML =
-    `<line class="sg-hist-base" x1="${pl}" y1="${Y(first).toFixed(1)}" x2="${W - pr}" y2="${Y(first).toFixed(1)}"/>`
+    xAxis
+    + `<line class="sg-hist-base" x1="${pl}" y1="${Y(first).toFixed(1)}" x2="${W - pr}" y2="${Y(first).toFixed(1)}"/>`
     + `<path class="sg-hist-line" d="${line}"/>`
     + `<circle class="sg-hist-dot" cx="${X(t1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="3"/>`
     + `<text class="sg-hist-txt" x="${pl - 6}" y="${(Y(hi - pad) + 3).toFixed(1)}" text-anchor="end">${fmtUsd(hi - pad)}</text>`
-    + `<text class="sg-hist-txt" x="${pl - 6}" y="${Y(lo + pad).toFixed(1)}" text-anchor="end">${fmtUsd(lo + pad)}</text>`
-    + `<text class="sg-hist-txt" x="${pl}" y="${H - 3}">−48h</text>`
-    + `<text class="sg-hist-txt" x="${W - pr}" y="${H - 3}" text-anchor="end">now</text>`;
+    + `<text class="sg-hist-txt" x="${pl - 6}" y="${Y(lo + pad).toFixed(1)}" text-anchor="end">${fmtUsd(lo + pad)}</text>`;
 
   chgEl.innerHTML = `<span class="${chg >= 0 ? "up" : "down"}">${chg >= 0 ? "▲" : "▼"} ${fmtUsd(Math.abs(chg))}</span>`
-    + ` vs 48h ago · now <b>${fmtUsd(last)}</b>`;
+    + ` vs ${fmtSpan} ago · now <b>${fmtUsd(last)}</b>`;
 
   const P = sg.pLeg.strike.toLocaleString(), C = sg.cLeg.strike.toLocaleString();
   const moved = chg >= 0 ? "risen" : "fallen";
   noteEl.textContent = long
-    ? `The ${P}/${C} strangle has ${moved} ${fmtUsd(Math.abs(chg))} in 48h — ${chg >= 0 ? "more expensive to buy now" : "cheaper to buy now"}. Trade prices (30-min candles), gaps carried forward.`
-    : `The strangle you'd sell has ${moved} ${fmtUsd(Math.abs(chg))} in 48h — ${chg >= 0 ? "you'd collect more selling now" : "cheaper to buy back now"}. Trade prices (30-min candles), gaps carried forward.`;
+    ? `The ${P}/${C} strangle has ${moved} ${fmtUsd(Math.abs(chg))} in ${fmtSpan} — ${chg >= 0 ? "more expensive to buy now" : "cheaper to buy now"}. Trade prices (30-min candles), gaps carried forward.`
+    : `The strangle you'd sell has ${moved} ${fmtUsd(Math.abs(chg))} in ${fmtSpan} — ${chg >= 0 ? "you'd collect more selling now" : "cheaper to buy back now"}. Trade prices (30-min candles), gaps carried forward.`;
 }
 const nearestBy = (arr, keyFn) => arr.reduce((best, x) => (keyFn(x) < keyFn(best) ? x : best), arr[0]);
 const sum2 = (a, b) => (a == null && b == null ? null : (a || 0) + (b || 0));
