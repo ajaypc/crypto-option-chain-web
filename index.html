@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Crypto Option Chain — BTC · ETH · SOL</title>
+<title>Crypto Option Chain — BTC · ETH</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Live near-the-money option chains for BTC, ETH and SOL — mark, bid/ask, implied vol, greeks and open interest. Data from Delta Exchange and Deribit.">
+<meta name="description" content="Live near-the-money option chains for BTC and ETH — mark, bid/ask, implied vol, greeks and open interest. Data from Delta Exchange.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%9B%93%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -168,17 +168,16 @@
     <div class="eyebrow">
       <span>live option chain</span><span class="dot"></span>
       <span>near expiry</span><span class="dot"></span>
-      <span id="src-note">Delta Exchange · Deribit</span>
+      <span id="src-note">Delta Exchange</span>
     </div>
     <h1>Crypto Option Chain</h1>
-    <p class="sub">Near-the-money calls and puts for BTC, ETH and SOL — mark price, implied vol, delta and open interest, pulled live from the exchanges each time this page loads.</p>
+    <p class="sub">Near-the-money calls and puts for BTC and ETH — mark price, implied vol, delta and open interest, pulled live from Delta Exchange each time this page loads.</p>
   </header>
 
   <div class="toolbar">
     <div class="tabs" id="tabs" role="tablist" aria-label="Asset">
       <button role="tab" data-asset="BTC" aria-selected="true">BTC</button>
       <button role="tab" data-asset="ETH" aria-selected="false">ETH</button>
-      <button role="tab" data-asset="SOL" aria-selected="false">SOL</button>
     </div>
     <label class="field">Expiry
       <select id="expiry"></select>
@@ -230,14 +229,13 @@
   </section>
 
   <footer>
-    <p><b>Sources.</b> BTC &amp; ETH: <a href="https://docs.delta.exchange/" target="_blank" rel="noopener">Delta Exchange</a> <code>/v2/tickers</code> (greeks included). SOL: <a href="https://docs.deribit.com/" target="_blank" rel="noopener">Deribit</a> USDC linear options <code>book_summary</code> — bulk feed carries no greeks, so SOL delta is blank. All prices in USD. IV is each venue's mark IV.</p>
-    <p><b>Expected move</b> = at-the-money straddle (call mark + put mark) ÷ spot — the market's priced-in ± move by that expiry. <b>Strangle builder</b> uses leg marks for cost; <code>P(...)</code> is a rough estimate from the leg deltas (delta ≈ risk-neutral probability), not a real probability, and SOL has no greeks so it's omitted there. <b>Not investment advice.</b> Auto-refreshes every 5s (only the asset you're viewing). <span id="built"></span></p>
+    <p><b>Source.</b> <a href="https://docs.delta.exchange/" target="_blank" rel="noopener">Delta Exchange</a> <code>/v2/tickers</code> (greeks included). All prices in USD. IV is the venue's mark IV.</p>
+    <p><b>Expected move</b> = at-the-money straddle (call mark + put mark) ÷ spot — the market's priced-in ± move by that expiry. <b>Strangle builder</b> uses leg marks for cost; <code>P(...)</code> is a rough estimate from the leg deltas (delta ≈ risk-neutral probability), not a real probability. <b>Not investment advice.</b> Auto-refreshes every 5s (only the asset you're viewing). <span id="built"></span></p>
   </footer>
 </div>
 
 <script>
 const DELTA = "https://api.india.delta.exchange/v2";
-const DERIBIT = "https://www.deribit.com/api/v2";
 const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 const STRIKE_PCT = 0.15;
 const REFRESH_MS = 5_000;
@@ -283,29 +281,6 @@ async function loadDelta(asset) {
   return { spot, rows, venue: "Delta Exchange" };
 }
 
-async function loadSol() {
-  const [idx, book] = await Promise.all([
-    j(`${DERIBIT}/public/get_index_price?index_name=sol_usdc`),
-    j(`${DERIBIT}/public/get_book_summary_by_currency?currency=USDC&kind=option`),
-  ]);
-  const rows = [];
-  for (const x of book) {
-    if (!x.instrument_name.startsWith("SOL_USDC-")) continue;
-    const m = /^SOL_USDC-(\d{1,2})([A-Z]{3})(\d{2})-([\d.]+)-([CP])$/.exec(x.instrument_name);
-    if (!m) continue;
-    const [, dd, mon, yy, strike, side] = m;
-    rows.push({
-      side, strike: +strike,
-      exp: `${dd.padStart(2, "0")}${mon}${yy}`,
-      expMs: Date.UTC(2000 + +yy, MONTHS.indexOf(mon), +dd, 8),
-      bid: num(x.bid_price), ask: num(x.ask_price), mark: num(x.mark_price),
-      iv: num(x.mark_iv) != null ? num(x.mark_iv) / 100 : null, delta: null,
-      oi: num(x.open_interest),
-    });
-  }
-  return { spot: num(idx.index_price), rows, venue: "Deribit" };
-}
-
 const median = (a) => { const s = a.filter(Number.isFinite).sort((x, y) => x - y); return s.length ? s[s.length >> 1] : null; };
 
 /* ---- state ---- */
@@ -316,7 +291,6 @@ const inflight = {};          // asset -> bool
 const FETCH = {
   BTC: () => loadDelta("BTC"),
   ETH: () => loadDelta("ETH"),
-  SOL: () => loadSol(),
 };
 
 async function loadAsset(a, { spin = true } = {}) {
@@ -644,7 +618,7 @@ $("#sg-putK").addEventListener("change", (e) => { strangle.custom = true; strang
 $("#refresh").addEventListener("click", () => loadAsset(asset));
 document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-    const order = ["BTC", "ETH", "SOL"];
+    const order = ["BTC", "ETH"];
     const i = order.indexOf(asset);
     switchTo(order[(i + (e.key === "ArrowRight" ? 1 : order.length - 1)) % order.length]);
   }
@@ -654,7 +628,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 loadAsset("BTC");
-setTimeout(() => { loadAsset("ETH", { spin: false }); loadAsset("SOL", { spin: false }); }, 500);
+setTimeout(() => loadAsset("ETH", { spin: false }), 500);
 setInterval(tick, REFRESH_MS);
 </script>
 </body>
