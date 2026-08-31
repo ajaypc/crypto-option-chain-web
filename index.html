@@ -464,8 +464,10 @@ function drawNetHistory(sg) {
 
   // data-point table (newest first)
   const nLabel = long ? "Net debit" : "Net credit";
-  const fmtT = (sec) => new Date(sec * 1000).toISOString().slice(5, 16).replace("T", " ");
-  let rowsHtml = `<thead><tr><th>Time (UTC)</th><th>${P} put</th><th>${C} call</th><th>${nLabel}</th><th>Δ 30m</th></tr></thead><tbody>`;
+  const fmtT = (sec) => new Date(sec * 1000).toLocaleString("en-GB", {
+    timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).replace(",", "");
+  let rowsHtml = `<thead><tr><th>Time (IST)</th><th>${P} put</th><th>${C} call</th><th>${nLabel}</th><th>Δ 30m</th></tr></thead><tbody>`;
   for (let i = s.length - 1; i >= 0; i--) {
     const r = s[i], d = i > 0 ? r.v - s[i - 1].v : null;
     rowsHtml += `<tr><td>${fmtT(r.t)}</td><td>${fmtUsd(r.p)}</td><td>${fmtUsd(r.c)}</td>`
