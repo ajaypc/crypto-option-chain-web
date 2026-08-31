@@ -19,6 +19,12 @@ It shows net debit/credit, breakevens, the move needed to profit vs. the ATM
 expected move, max loss/profit, a delta-based P(expire between strikes), net
 vega/theta, a payoff diagram, and highlights the two legs in the chain.
 
+Below the payoff is a **48-hour, 30-minute history** of the two legs' combined
+price — the net credit you'd collect (short) or debit you'd pay (long), from
+Delta's `/v2/history/candles`. These are last-trade prices, so illiquid strikes
+have gaps (carried forward) and a very near expiry may have too few trades to
+plot.
+
 **Not investment advice.**
 
 Deployed with GitHub Pages: <https://ajaypc.github.io/crypto-option-chain-web/>
