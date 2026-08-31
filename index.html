@@ -156,6 +156,19 @@
   .sg-hist-grid { stroke:var(--line); stroke-width:1; }
   .sg-hist-txt { font:400 9.5px/1 "IBM Plex Mono", monospace; fill:var(--muted); }
   .sg-hist-note { font:400 10.5px/1.5 "IBM Plex Mono", monospace; color:var(--muted); margin-top:7px; }
+  .sg-hist-data { margin-top:9px; }
+  .sg-hist-data summary { font:500 10.5px/1.4 "IBM Plex Mono", monospace; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--muted); cursor:pointer; list-style-position:inside; }
+  .sg-hist-data summary:hover { color:var(--ink); }
+  .sg-hist-tbl-scroll { max-height:220px; overflow:auto; margin-top:8px; border:1px solid var(--line); border-radius:8px; }
+  #sg-hist-tbl { width:100%; border-collapse:collapse; font:400 11px/1.3 "IBM Plex Mono", monospace; font-variant-numeric:tabular-nums; }
+  #sg-hist-tbl th { position:sticky; top:0; background:var(--surface-2); color:var(--muted); font-weight:500;
+    text-align:right; padding:6px 10px; border-bottom:1px solid var(--line); }
+  #sg-hist-tbl th:first-child { text-align:left; }
+  #sg-hist-tbl td { text-align:right; padding:5px 10px; border-bottom:1px solid var(--line-soft); white-space:nowrap; }
+  #sg-hist-tbl td:first-child { text-align:left; color:var(--muted); }
+  #sg-hist-tbl tr:last-child td { border-bottom:0; }
+  #sg-hist-tbl .up { color:var(--call); } #sg-hist-tbl .down { color:var(--put); }
   .sg-hist .up { color:var(--call); } .sg-hist .down { color:var(--put); }
 
   tbody tr.leg td.strike { box-shadow:inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent); }
@@ -230,6 +243,10 @@
         </div>
         <svg id="sg-hist-svg" viewBox="0 0 680 96" role="img" aria-label="Net credit over the last 48 hours"></svg>
         <div class="sg-hist-note" id="sg-hist-note"></div>
+        <details class="sg-hist-data" id="sg-hist-data" hidden>
+          <summary id="sg-hist-data-sum">data points</summary>
+          <div class="sg-hist-tbl-scroll"><table id="sg-hist-tbl"></table></div>
+        </details>
       </div>
       <p class="sg-verdict" id="sg-verdict"></p>
     </div>
@@ -361,7 +378,7 @@ function buildNetSeries(cs, ps) {
   const sc = sampler(cs), sp = sampler(ps), out = [];
   for (let t = start; t <= now; t += step) {
     const c = sc(t), p = sp(t);
-    if (c != null && p != null) out.push({ t, v: c + p });
+    if (c != null && p != null) out.push({ t, c, p, v: c + p });
   }
   return out;
 }
@@ -395,6 +412,7 @@ function drawNetHistory(sg) {
   if (!s || s.length < 2) {
     svgEl.innerHTML = ""; chgEl.textContent = "";
     $("#sg-hist-span").textContent = "· last 48h · 30-min";
+    $("#sg-hist-data").hidden = true;
     noteEl.textContent = histState.loading ? "Loading 30-min history…"
       : histState.err ? "History unavailable — " + histState.err
       : "Not enough recent trades on both legs for a 30-min history — try a nearer expiry or a tighter width.";
@@ -443,6 +461,20 @@ function drawNetHistory(sg) {
   noteEl.textContent = long
     ? `The ${P}/${C} strangle has ${moved} ${fmtUsd(Math.abs(chg))} in ${fmtSpan} — ${chg >= 0 ? "more expensive to buy now" : "cheaper to buy now"}. Trade prices (30-min candles), gaps carried forward.`
     : `The strangle you'd sell has ${moved} ${fmtUsd(Math.abs(chg))} in ${fmtSpan} — ${chg >= 0 ? "you'd collect more selling now" : "cheaper to buy back now"}. Trade prices (30-min candles), gaps carried forward.`;
+
+  // data-point table (newest first)
+  const nLabel = long ? "Net debit" : "Net credit";
+  const fmtT = (sec) => new Date(sec * 1000).toISOString().slice(5, 16).replace("T", " ");
+  let rowsHtml = `<thead><tr><th>Time (UTC)</th><th>${P} put</th><th>${C} call</th><th>${nLabel}</th><th>Δ 30m</th></tr></thead><tbody>`;
+  for (let i = s.length - 1; i >= 0; i--) {
+    const r = s[i], d = i > 0 ? r.v - s[i - 1].v : null;
+    rowsHtml += `<tr><td>${fmtT(r.t)}</td><td>${fmtUsd(r.p)}</td><td>${fmtUsd(r.c)}</td>`
+      + `<td>${fmtUsd(r.v)}</td>`
+      + `<td class="${d == null ? "" : d >= 0 ? "up" : "down"}">${d == null ? "–" : (d >= 0 ? "+" : "−") + fmtUsd(Math.abs(d))}</td></tr>`;
+  }
+  $("#sg-hist-tbl").innerHTML = rowsHtml + "</tbody>";
+  $("#sg-hist-data-sum").textContent = `data points (${s.length} · 30-min, newest first)`;
+  $("#sg-hist-data").hidden = false;
 }
 const nearestBy = (arr, keyFn) => arr.reduce((best, x) => (keyFn(x) < keyFn(best) ? x : best), arr[0]);
 const sum2 = (a, b) => (a == null && b == null ? null : (a || 0) + (b || 0));
