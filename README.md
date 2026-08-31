@@ -11,16 +11,16 @@ exchanges in the browser on load and every 5 seconds (the asset you're viewing):
 The "expected move" figure is the at-the-money straddle (call mark + put mark)
 divided by spot — the market's priced-in ± move by that expiry.
 
-## Strangle builder
+## Short strangle builder
 
-A panel above the chain sizes an OTM **call + put** strangle on the selected
-expiry. Toggle **Long / Short**, pick the width by **delta** (10Δ / 16Δ / 25Δ), or set both strikes by hand.
-It shows net debit/credit, breakevens, the move needed to profit vs. the ATM
-expected move, max loss/profit, a delta-based P(expire between strikes), net
+A panel above the chain sizes a short OTM **call + put** strangle on the selected
+expiry. Pick the width by **delta** (10Δ / 16Δ / 25Δ) or set both strikes by hand.
+It shows net credit, breakevens, the move needed to profit vs. the ATM
+expected move, max profit, a delta-based P(keep the credit), net
 vega/theta, a payoff diagram, and highlights the two legs in the chain.
 
 Below the payoff is a **30-minute history** of the two legs' combined price
-(up to 48h) — the net credit you'd collect (short) or debit you'd pay (long),
+(up to 48h) — the net credit you'd collect,
 from Delta's `/v2/history/candles`, with time-of-day marks on the x-axis. These
 are last-trade prices, so illiquid strikes have gaps (carried forward), the
 window shrinks to however far back both legs have actually traded, and a very
