@@ -14,7 +14,7 @@
     --bg:#f5f5f1; --surface:#fffffe; --surface-2:#eeede8; --ink:#17181c; --muted:#63656e;
     --line:#e0dfd8; --line-soft:#eceae3;
     --call:#1baf7a; --put:#e34948; --accent:#2a78d6; --atm:#eda100;
-    --zone-long:rgba(227,73,72,.09); --zone-short:rgba(27,175,122,.12); --zone:transparent;
+    --zone-short:rgba(27,175,122,.12); --zone:transparent;
     --shadow:0 1px 2px rgba(20,20,25,.06), 0 8px 24px rgba(20,20,25,.05);
   }
   @media (prefers-color-scheme: dark) {
@@ -22,7 +22,7 @@
       --bg:#121317; --surface:#1b1d22; --surface-2:#23262c; --ink:#eef0f3; --muted:#969aa3;
       --line:#2c2f36; --line-soft:#23262c;
       --call:#3ac08c; --put:#e26463; --accent:#3f90ec; --atm:#e0a92e;
-      --zone-long:rgba(226,100,99,.14); --zone-short:rgba(58,192,140,.16); --zone:transparent;
+      --zone-short:rgba(58,192,140,.16); --zone:transparent;
       --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
     }
   }
@@ -30,7 +30,7 @@
     --bg:#121317; --surface:#1b1d22; --surface-2:#23262c; --ink:#eef0f3; --muted:#969aa3;
     --line:#2c2f36; --line-soft:#23262c;
     --call:#3ac08c; --put:#e26463; --accent:#3f90ec; --atm:#e0a92e;
-    --zone-long:rgba(226,100,99,.14); --zone-short:rgba(58,192,140,.16); --zone:transparent;
+    --zone-short:rgba(58,192,140,.16); --zone:transparent;
     --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
   }
   * { box-sizing:border-box; }
@@ -117,13 +117,13 @@
   /* strangle builder */
   .sg-wrap { padding:16px 18px 18px; }
   .sg-controls { display:flex; flex-wrap:wrap; gap:12px 16px; align-items:center; }
-  #sg-side button, #sg-width button {
+  #sg-width button {
     font:500 12.5px/1 "IBM Plex Mono", monospace; color:var(--muted); background:none; border:0;
     cursor:pointer; padding:7px 12px; border-radius:7px; transition:color .12s, background .12s;
   }
-  #sg-side button:hover, #sg-width button:hover { color:var(--ink); }
-  #sg-side button[aria-pressed="true"], #sg-width button[aria-pressed="true"] { background:var(--surface); color:var(--ink); box-shadow:var(--shadow); }
-  #sg-side button:focus-visible, #sg-width button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  #sg-width button:hover { color:var(--ink); }
+  #sg-width button[aria-pressed="true"] { background:var(--surface); color:var(--ink); box-shadow:var(--shadow); }
+  #sg-width button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .sg-custom { display:flex; gap:12px; flex-wrap:wrap; }
 
   .sg-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(132px,1fr)); gap:10px; margin:16px 0 4px; }
@@ -219,15 +219,11 @@
 
   <section class="panel" id="sg-panel" hidden>
     <div class="panel-head">
-      <h2>Strangle builder</h2>
-      <span class="meta">buy (long) or sell (short) an out-of-the-money call + put, same expiry</span>
+      <h2>Short strangle builder</h2>
+      <span class="meta">sell an out-of-the-money call + put on the same expiry &mdash; collect premium, keep it if price stays between the strikes</span>
     </div>
     <div class="sg-wrap">
       <div class="sg-controls">
-        <div class="seg" id="sg-side" role="group" aria-label="Direction">
-          <button data-v="long" aria-pressed="true">Long</button>
-          <button data-v="short" aria-pressed="false">Short</button>
-        </div>
         <div class="seg" id="sg-width" role="group" aria-label="Strike width"></div>
         <div class="sg-custom" id="sg-custom" hidden>
           <label class="field">Call <select id="sg-callK"></select></label>
@@ -354,7 +350,7 @@ function nearestFutureExpiry(rows) {
 }
 
 /* ---- strangle builder ---- */
-const strangle = { side: "long", width: null, custom: false, callK: null, putK: null };
+const strangle = { width: null, custom: false, callK: null, putK: null };
 const DELTA_TARGETS = [10, 16, 25];
 const PCT_TARGETS = [5, 10, 15];
 
@@ -404,9 +400,8 @@ async function updateNetHistory(sg) {
 
 function drawNetHistory(sg) {
   const box = $("#sg-hist"), s = histState.series;
-  const long = strangle.side === "long";
   box.hidden = false;
-  $("#sg-hist-label").textContent = long ? "Net debit" : "Net credit";
+  $("#sg-hist-label").textContent = "Net credit";
   const svgEl = $("#sg-hist-svg"), chgEl = $("#sg-hist-chg"), noteEl = $("#sg-hist-note");
 
   if (!s || s.length < 2) {
@@ -458,12 +453,10 @@ function drawNetHistory(sg) {
 
   const P = sg.pLeg.strike.toLocaleString(), C = sg.cLeg.strike.toLocaleString();
   const moved = chg >= 0 ? "risen" : "fallen";
-  noteEl.textContent = long
-    ? `The ${P}/${C} strangle has ${moved} ${fmtUsd(Math.abs(chg))} in ${fmtSpan} — ${chg >= 0 ? "more expensive to buy now" : "cheaper to buy now"}. Trade prices (30-min candles), gaps carried forward.`
-    : `The strangle you'd sell has ${moved} ${fmtUsd(Math.abs(chg))} in ${fmtSpan} — ${chg >= 0 ? "you'd collect more selling now" : "cheaper to buy back now"}. Trade prices (30-min candles), gaps carried forward.`;
+  noteEl.textContent = `The strangle you'd sell has ${moved} ${fmtUsd(Math.abs(chg))} in ${fmtSpan} — ${chg >= 0 ? "you'd collect more selling now" : "cheaper to buy back now"}. Trade prices (30-min candles), gaps carried forward.`;
 
   // data-point table (newest first)
-  const nLabel = long ? "Net debit" : "Net credit";
+  const nLabel = "Net credit";
   const fmtT = (sec) => new Date(sec * 1000).toLocaleString("en-GB", {
     timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false,
   }).replace(",", "");
@@ -523,19 +516,18 @@ function payoffSVG(sg, spot) {
   const span = sg.beUp - sg.beDn;
   const xLo = Math.min(sg.beDn - span * 0.28, spot * 0.97);
   const xHi = Math.max(sg.beUp + span * 0.28, spot * 1.03);
-  const long = strangle.side === "long";
   const pl = (px) => {
     let v;
     if (px <= sg.pLeg.strike) v = (sg.pLeg.strike - px) - sg.net;
     else if (px >= sg.cLeg.strike) v = (px - sg.cLeg.strike) - sg.net;
     else v = -sg.net;
-    return long ? v : -v;
+    return -v;                       // short: profit between strikes, unbounded loss on the wings
   };
   const N = 80;
   const pts = Array.from({ length: N + 1 }, (_, i) => { const px = xLo + (xHi - xLo) * i / N; return [px, pl(px)]; });
-  // fixed scale in multiples of premium so the loss zone stays readable; wings clip off-top
-  const yHi = long ? sg.net * 2.2 : sg.net * 1.4;
-  const yLo = long ? -sg.net * 1.4 : -sg.net * 2.2;
+  // fixed scale in multiples of premium so the profit zone stays readable; wings clip off-bottom
+  const yHi = sg.net * 1.4;
+  const yLo = -sg.net * 2.2;
   const X = (v) => m.l + (v - xLo) / (xHi - xLo) * (W - m.l - m.r);
   const Yr = (v) => m.t + (yHi - v) / (yHi - yLo) * (H - m.t - m.b);
   const Y = (v) => Math.max(m.t, Math.min(H - m.b, Yr(v)));
@@ -551,17 +543,14 @@ function payoffSVG(sg, spot) {
     ${vt(sg.beDn, "", fmtUsd(sg.beDn))}${vt(sg.beUp, "", fmtUsd(sg.beUp))}
     <line class="sg-be spot" x1="${X(spot).toFixed(1)}" y1="${m.t}" x2="${X(spot).toFixed(1)}" y2="${H - m.b}" style="stroke:var(--accent)"/>
     <text class="sg-txt spot" x="${X(spot).toFixed(1)}" y="${m.t - 2}" text-anchor="middle">spot ${fmtUsd(spot, spot >= 100 ? 0 : 2)}</text>
-    <path class="${long ? "sg-pl-pos" : "sg-pl-neg"}" d="${line}" fill="none" stroke-width="2"/>`;
+    <path class="sg-pl-neg" d="${line}" fill="none" stroke-width="2"/>`;
 }
 
 function paintStrangle(sg, spot, expMovePct, exp) {
   const panel = $("#sg-panel");
   if (!sg) { panel.hidden = true; return; }
   panel.hidden = false;
-  const long = strangle.side === "long";
-  $("#chain-body").style.setProperty("--zone", long ? "var(--zone-long)" : "var(--zone-short)");
-
-  $("#sg-side").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === strangle.side));
+  $("#chain-body").style.setProperty("--zone", "var(--zone-short)");
 
   const unit = sg.mode === "delta" ? "Δ" : "%";
   const targets = sg.mode === "delta" ? DELTA_TARGETS : PCT_TARGETS;
@@ -594,20 +583,20 @@ function paintStrangle(sg, spot, expMovePct, exp) {
   const legSub = sg.mode === "delta"
     ? `Δ ${Math.abs(sg.pLeg.delta).toFixed(2)} / ${sg.cLeg.delta.toFixed(2)}`
     : `${((1 - sg.pLeg.strike / spot) * 100).toFixed(1)}% / ${((sg.cLeg.strike / spot - 1) * 100).toFixed(1)}% OTM`;
-  const nv = sg.vega != null ? (long ? sg.vega : -sg.vega) : null;
-  const nt = sg.theta != null ? (long ? sg.theta : -sg.theta) : null;
+  const nv = sg.vega != null ? -sg.vega : null;
+  const nt = sg.theta != null ? -sg.theta : null;
 
   const cells = [
-    { k: long ? "Net debit" : "Net credit", v: fmtUsd(sg.net),
-      s: sg.netAsk != null ? (long ? "mark · ask " + fmtUsd(sg.netAsk) : "mark · bid " + fmtUsd(sg.netBid ?? sg.net)) : "at mark" },
+    { k: "Net credit", v: fmtUsd(sg.net),
+      s: sg.netAsk != null ? "mark · bid " + fmtUsd(sg.netBid ?? sg.net) : "at mark" },
     { k: "Legs (put / call)", v: `${sg.pLeg.strike.toLocaleString()} / ${sg.cLeg.strike.toLocaleString()}`, s: legSub },
     { k: "Breakevens", v: `${fmtUsd(sg.beDn)} – ${fmtUsd(sg.beUp)}`, s: `−${(sg.moveDn * 100).toFixed(1)}% / +${(sg.moveUp * 100).toFixed(1)}%` },
     { k: "Move to profit", v: `±${(beMove * 100).toFixed(1)}<small> %</small>`, hi: true,
       s: expMovePct != null ? `expected ±${(expMovePct * 100).toFixed(1)}%` : "avg of both breakevens" },
-    { k: long ? "Max loss" : "Max profit", v: fmtUsd(sg.net), s: long ? "if it lands between strikes" : "if it stays between strikes" },
-    { k: long ? "P(full loss)" : "P(keep credit)", v: sg.pInside != null ? `${(sg.pInside * 100).toFixed(0)}<small> %</small>` : "–",
+    { k: "Max profit", v: fmtUsd(sg.net), s: "if it stays between strikes" },
+    { k: "P(keep credit)", v: sg.pInside != null ? `${(sg.pInside * 100).toFixed(0)}<small> %</small>` : "–",
       s: sg.pInside != null ? "expires between strikes" : "no greeks for this asset" },
-    { k: "Net vega / theta", v: nv != null ? `${signed(nv, 1)} / ${signed(nt, 1)}` : "–", s: long ? "own vol, pay time" : "short vol, collect time" },
+    { k: "Net vega / theta", v: nv != null ? `${signed(nv, 1)} / ${signed(nt, 1)}` : "–", s: "short vol, collect time" },
   ];
   $("#sg-grid").innerHTML = cells.map((c) =>
     `<div class="sg-cell${c.hi ? " hi" : ""}"><div class="k">${c.k}</div><div class="v">${c.v}</div><div class="s">${c.s || ""}</div></div>`).join("");
@@ -619,13 +608,10 @@ function paintStrangle(sg, spot, expMovePct, exp) {
   const em = expMovePct == null ? "" : `±${(expMovePct * 100).toFixed(1)}%`;
   const wider = expMovePct != null && beMove > expMovePct;
   const pClause = sg.pInside != null ? ` About <b>${(sg.pInside * 100).toFixed(0)}%</b> odds of that, by the leg deltas.` : "";
-  $("#sg-verdict").innerHTML = long
-    ? `Pay <b>${fmtUsd(sg.net)}</b> for the ${P}/${C} strangle. ${A} must move roughly <b>±${(beMove * 100).toFixed(1)}%</b> by ${exp} to break even`
-      + (em ? ` — ${wider ? "wider than" : "inside"} the market's ${em} expected move, so you're betting on ${wider ? "a bigger swing than priced in" : "movement the market underprices"}` : "")
-      + `. Full <b>${fmtUsd(sg.net)}</b> loss if ${A} finishes between ${P} and ${C}.`
-    : `Collect <b>${fmtUsd(sg.net)}</b> selling the ${P}/${C} strangle. Keep all of it if ${A} stays between <b>${fmtUsd(sg.beDn)}</b> and <b>${fmtUsd(sg.beUp)}</b> (±${(beMove * 100).toFixed(1)}%) through ${exp}`
-      + (em ? ` — ${wider ? "a wider safe band than" : "a tighter band than"} the ${em} expected move` : "")
-      + `.${pClause} Losses grow without limit if it breaks out.`;
+  $("#sg-verdict").innerHTML =
+    `Collect <b>${fmtUsd(sg.net)}</b> selling the ${P}/${C} strangle. Keep all of it if ${A} stays between <b>${fmtUsd(sg.beDn)}</b> and <b>${fmtUsd(sg.beUp)}</b> (±${(beMove * 100).toFixed(1)}%) through ${exp}`
+    + (em ? ` — ${wider ? "a wider safe band than" : "a tighter band than"} the ${em} expected move` : "")
+    + `.${pClause} Losses grow without limit if it breaks out.`;
 
   updateNetHistory(sg);
 }
@@ -766,10 +752,6 @@ $("#tabs").addEventListener("click", (e) => {
 });
 $("#expiry").addEventListener("change", (e) => { chosenExpiry[asset] = e.target.value; resetStrangleStrikes(); render(); });
 
-$("#sg-side").addEventListener("click", (e) => {
-  const b = e.target.closest("button"); if (!b) return;
-  strangle.side = b.dataset.v; render();
-});
 $("#sg-width").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   if (b.dataset.v === "custom") strangle.custom = true;
